@@ -1,0 +1,12 @@
+{
+  "domain": "energy_planner",
+  "name": "Energy Planner",
+  "version": "1.0.0b1",
+  "config_flow": true,
+  "documentation": "https://github.com/pierre/energy-planner-hacs",
+  "issue_tracker": "https://github.com/pierre/energy-planner-hacs/issues",
+  "dependencies": [],
+  "codeowners": ["@pierre"],
+  "requirements": [],
+  "iot_class": "local_polling"
+}

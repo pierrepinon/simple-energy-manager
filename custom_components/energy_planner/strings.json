@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Energy Planner",
+        "description": "Select the electricity price sensor. It must expose a `prices` attribute with `timestamp` and `price` fields.",
+        "data": {
+          "price_sensor": "Price sensor",
+          "max_power_sensor": "Meter maximum power sensor"
+        },
+        "data_description": {
+          "price_sensor": "Sensor entity with a `prices` attribute containing the price slots",
+          "max_power_sensor": "Sensor entity exposing the subscribed meter power limit in VA"
+        }
+      }
+    },
+    "error": {}
+  },
+  "config_subentry": {
+    "boiler": {
+      "initiate_flow": {
+        "user": "Add a water heater"
+      },
+      "entry_type": "Water heater",
+      "step": {
+        "user": {
+          "title": "Add a water heater",
+          "description": "Select the water heater to control and configure its consumption parameters.",
+          "data": {
+            "entity_id": "Water heater",
+            "power": "Power",
+            "duration": "Minimum heating duration (min)"
+          },
+          "data_description": {
+            "entity_id": "water_heater entity to control",
+            "power": "Electrical power of the boiler in watts (e.g. 2000 W)",
+            "duration": "Heating duration needed per day (e.g. 120 min = 2 h)"
+          }
+        },
+        "reconfigure": {
+          "title": "Edit water heater",
+          "data": {
+            "entity_id": "Water heater",
+            "power": "Power",
+            "duration": "Minimum heating duration (min)"
+          },
+          "data_description": {
+            "entity_id": "water_heater entity to control",
+            "power": "Electrical power of the boiler in watts (e.g. 2000 W)",
+            "duration": "Heating duration needed per day (e.g. 120 min = 2 h)"
+          }
+        }
+      },
+      "abort": {
+        "entry_not_found": "Entry not found"
+      },
+      "error": {
+        "duplicate_entity": "This device is already configured"
+      }
+    }
+  }
+}

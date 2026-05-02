@@ -1,0 +1,43 @@
+plan_device:
+  name: Plan device
+  description: >
+    Find the cheapest available time slot to run a device within a given window,
+    respecting the meter power limit, and add the event to the planning calendar.
+  fields:
+    duration:
+      name: Duration
+      description: Duration of the device usage in minutes.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+    power:
+      name: Power
+      description: Power consumption of the device in watts (W = VA).
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 20000
+          unit_of_measurement: W
+    earliest_start:
+      name: Earliest start
+      description: Earliest allowed start time (ISO 8601, e.g. "2025-01-15T08:00:00").
+      required: true
+      selector:
+        datetime:
+    latest_end:
+      name: Latest end
+      description: Latest allowed end time (ISO 8601, e.g. "2025-01-15T22:00:00").
+      required: true
+      selector:
+        datetime:
+    label:
+      name: Label
+      description: Label for the calendar event.
+      required: false
+      default: "Appareil planifié"
+      selector:
+        text:

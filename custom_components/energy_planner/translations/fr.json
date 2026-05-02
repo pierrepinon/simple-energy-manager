@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurer Energy Planner",
+        "description": "Sélectionnez le capteur de prix de l'électricité. Il doit exposer un attribut `prices` avec des champs `timestamp` et `price`.",
+        "data": {
+          "price_sensor": "Capteur de prix",
+          "max_power_sensor": "Capteur de puissance maximale du compteur"
+        },
+        "data_description": {
+          "price_sensor": "Entité sensor avec un attribut `prices` contenant les créneaux tarifaires",
+          "max_power_sensor": "Entité sensor exposant la puissance souscrite du compteur en VA"
+        }
+      }
+    },
+    "error": {}
+  },
+  "config_subentry": {
+    "boiler": {
+      "initiate_flow": {
+        "user": "Ajouter un ballon d'eau chaude"
+      },
+      "entry_type": "Ballon d'eau chaude",
+      "step": {
+        "user": {
+          "title": "Ajouter un ballon d'eau chaude",
+          "description": "Sélectionnez le ballon d'eau chaude à piloter et configurez ses paramètres de consommation.",
+          "data": {
+            "entity_id": "Ballon d'eau chaude",
+            "power": "Puissance",
+            "duration": "Durée de chauffe minimale (min)"
+          },
+          "data_description": {
+            "entity_id": "Entité water_heater à piloter",
+            "power": "Puissance électrique du ballon en watts (ex : 2000 W)",
+            "duration": "Durée de chauffe nécessaire par jour (ex : 120 min = 2 h)"
+          }
+        },
+        "reconfigure": {
+          "title": "Modifier le ballon",
+          "data": {
+            "entity_id": "Ballon d'eau chaude",
+            "power": "Puissance",
+            "duration": "Durée de chauffe minimale (min)"
+          },
+          "data_description": {
+            "entity_id": "Entité water_heater à piloter",
+            "power": "Puissance électrique du ballon en watts (ex : 2000 W)",
+            "duration": "Durée de chauffe nécessaire par jour (ex : 120 min = 2 h)"
+          }
+        }
+      },
+      "abort": {
+        "entry_not_found": "Entrée introuvable"
+      },
+      "error": {
+        "duplicate_entity": "Cet appareil est déjà configuré"
+      }
+    }
+  }
+}
