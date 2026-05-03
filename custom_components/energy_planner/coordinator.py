@@ -300,9 +300,13 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
         if state is None:
             return None
         try:
-            return float(state.state)
+            value = float(state.state)
         except (ValueError, TypeError):
             return None
+        unit = state.attributes.get("unit_of_measurement", "VA")
+        if unit in ("kVA", "kW", "kva"):
+            value *= 1000
+        return value
 
     def _custom_power_in_slot(self, slot_start_ts: float, slot_end_ts: float) -> float:
         total = 0.0
