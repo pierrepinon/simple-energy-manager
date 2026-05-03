@@ -128,21 +128,23 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
     # --------------------------------------------------------------- update data
 
     async def _async_update_data(self) -> dict:
+        price_sensor_id = self.config_entry.data[CONF_PRICE_SENSOR]
+        state = self.hass.states.get(price_sensor_id)
+        prices: list[dict] = state.attributes.get(PRICE_ATTR, []) if state else []
+
         if self._plan_ready:
+            # Rafraîchit _slots sans recalculer le planning
+            if prices:
+                self._refresh_slots(prices)
             self._schedule_transitions(self._collect_transitions())
             return self._build_result()
 
         # Pas de plan valide : on calcule depuis le capteur de prix
-        price_sensor_id = self.config_entry.data[CONF_PRICE_SENSOR]
-        state = self.hass.states.get(price_sensor_id)
-
-        if state is None:
-            _LOGGER.debug("Capteur prix pas encore disponible : %s", price_sensor_id)
-            return self._build_result()
-
-        prices: list[dict] = state.attributes.get(PRICE_ATTR, [])
         if not prices:
-            _LOGGER.warning("Attribut '%s' vide sur %s", PRICE_ATTR, price_sensor_id)
+            if state is None:
+                _LOGGER.debug("Capteur prix pas encore disponible : %s", price_sensor_id)
+            else:
+                _LOGGER.warning("Attribut '%s' vide sur %s", PRICE_ATTR, price_sensor_id)
             return self._build_result()
 
         boilers = [
@@ -161,16 +163,9 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
 
     # ------------------------------------------------------------------ planning
 
-    def _compute_raw_schedule(
-        self, prices: list[dict], boilers: list[dict]
-    ) -> dict[str, dict]:
-        if not prices:
-            return {}
-
-        now_ts = dt_util.now().timestamp()
+    def _refresh_slots(self, prices: list[dict]) -> None:
         sorted_prices = sorted(prices, key=lambda p: p[PRICE_TIMESTAMP])
         slots: list[dict] = []
-
         for i, entry in enumerate(sorted_prices):
             start: float = entry[PRICE_TIMESTAMP]
             end: float = (
@@ -181,14 +176,18 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
                     if len(sorted_prices) > 1 else 3600
                 )
             )
-            slots.append({
-                "start": start,
-                "end": end,
-                "price": entry[PRICE_VALUE],
-                "duration_min": (end - start) / 60,
-            })
-
+            slots.append({"start": start, "end": end, "price": entry[PRICE_VALUE], "duration_min": (end - start) / 60})
         self._slots = slots
+
+    def _compute_raw_schedule(
+        self, prices: list[dict], boilers: list[dict]
+    ) -> dict[str, dict]:
+        if not prices:
+            return {}
+
+        now_ts = dt_util.now().timestamp()
+        self._refresh_slots(prices)
+        slots = self._slots
 
         raw: dict[str, dict] = {}
         for boiler in boilers:
