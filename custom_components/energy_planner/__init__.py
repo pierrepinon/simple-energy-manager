@@ -56,6 +56,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if latest_end.tzinfo is None:
                 latest_end = dt_util.as_local(latest_end)
 
+            now = dt_util.now()
+            if earliest_start <= now:
+                raise HomeAssistantError("earliest_start doit être dans le futur")
+            if latest_end <= now:
+                raise HomeAssistantError("latest_end doit être dans le futur")
+            if latest_end <= earliest_start:
+                raise HomeAssistantError("latest_end doit être après earliest_start")
+
             result = coord.find_cheapest_slot(power_w, duration_min, earliest_start, latest_end)
             if result is None:
                 raise HomeAssistantError(

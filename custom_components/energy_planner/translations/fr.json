@@ -19,35 +19,39 @@
   "config_subentry": {
     "boiler": {
       "initiate_flow": {
-        "user": "Ajouter un ballon d'eau chaude"
+        "user": "Ajouter un appareil"
       },
-      "entry_type": "Ballon d'eau chaude",
+      "entry_type": "Appareil",
       "step": {
         "user": {
-          "title": "Ajouter un ballon d'eau chaude",
-          "description": "Sélectionnez le ballon d'eau chaude à piloter et configurez ses paramètres de consommation.",
+          "title": "Ajouter un appareil",
+          "description": "Sélectionnez le switch à piloter et configurez ses paramètres de consommation.",
           "data": {
-            "entity_id": "Ballon d'eau chaude",
+            "entity_id": "Switch",
             "power": "Puissance",
-            "duration": "Durée de chauffe minimale (min)"
+            "duration": "Durée minimale (min)",
+            "latest_time": "Doit avoir chauffé avant"
           },
           "data_description": {
-            "entity_id": "Entité water_heater à piloter",
-            "power": "Puissance électrique du ballon en watts (ex : 2000 W)",
-            "duration": "Durée de chauffe nécessaire par jour (ex : 120 min = 2 h)"
+            "entity_id": "Entité switch à piloter",
+            "power": "Puissance électrique en watts (ex : 2000 W)",
+            "duration": "Durée nécessaire par jour (ex : 120 min = 2 h)",
+            "latest_time": "Heure limite à laquelle l'appareil doit avoir terminé sa chauffe (ex : 07:00)"
           }
         },
         "reconfigure": {
-          "title": "Modifier le ballon",
+          "title": "Modifier l'appareil",
           "data": {
-            "entity_id": "Ballon d'eau chaude",
+            "entity_id": "Switch",
             "power": "Puissance",
-            "duration": "Durée de chauffe minimale (min)"
+            "duration": "Durée minimale (min)",
+            "latest_time": "Doit avoir chauffé avant"
           },
           "data_description": {
-            "entity_id": "Entité water_heater à piloter",
-            "power": "Puissance électrique du ballon en watts (ex : 2000 W)",
-            "duration": "Durée de chauffe nécessaire par jour (ex : 120 min = 2 h)"
+            "entity_id": "Entité switch à piloter",
+            "power": "Puissance électrique en watts (ex : 2000 W)",
+            "duration": "Durée nécessaire par jour (ex : 120 min = 2 h)",
+            "latest_time": "Heure limite à laquelle l'appareil doit avoir terminé sa chauffe (ex : 07:00)"
           }
         }
       },

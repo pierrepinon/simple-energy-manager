@@ -21,33 +21,37 @@
       "initiate_flow": {
         "user": "Add a water heater"
       },
-      "entry_type": "Water heater",
+      "entry_type": "Switch",
       "step": {
         "user": {
           "title": "Add a water heater",
           "description": "Select the water heater to control and configure its consumption parameters.",
           "data": {
-            "entity_id": "Water heater",
+            "entity_id": "Switch",
             "power": "Power",
-            "duration": "Minimum heating duration (min)"
+            "duration": "Minimum duration (min)",
+            "latest_time": "Must have run by"
           },
           "data_description": {
-            "entity_id": "water_heater entity to control",
-            "power": "Electrical power of the boiler in watts (e.g. 2000 W)",
-            "duration": "Heating duration needed per day (e.g. 120 min = 2 h)"
+            "entity_id": "switch entity to control",
+            "power": "Electrical power in watts (e.g. 2000 W)",
+            "duration": "Required daily duration (e.g. 120 min = 2 h)",
+            "latest_time": "Latest time by which the device must have completed its run (e.g. 07:00)"
           }
         },
         "reconfigure": {
-          "title": "Edit water heater",
+          "title": "Edit device",
           "data": {
-            "entity_id": "Water heater",
+            "entity_id": "Switch",
             "power": "Power",
-            "duration": "Minimum heating duration (min)"
+            "duration": "Minimum duration (min)",
+            "latest_time": "Must have run by"
           },
           "data_description": {
-            "entity_id": "water_heater entity to control",
-            "power": "Electrical power of the boiler in watts (e.g. 2000 W)",
-            "duration": "Heating duration needed per day (e.g. 120 min = 2 h)"
+            "entity_id": "switch entity to control",
+            "power": "Electrical power in watts (e.g. 2000 W)",
+            "duration": "Required daily duration (e.g. 120 min = 2 h)",
+            "latest_time": "Latest time by which the device must have completed its run (e.g. 07:00)"
           }
         }
       },

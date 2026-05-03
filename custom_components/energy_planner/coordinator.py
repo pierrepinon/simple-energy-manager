@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_point_in_time, async_track_time_change
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -19,12 +20,17 @@ from .const import (
     CONF_BOILER_ENTITY,
     CONF_BOILER_POWER,
     CONF_BOILER_DURATION,
+    CONF_BOILER_LATEST,
     PRICE_ATTR,
     PRICE_TIMESTAMP,
     PRICE_VALUE,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_EVENTS_STORE_KEY = "energy_planner.custom_events"
+_SCHEDULE_STORE_KEY = "energy_planner.schedule"
+_STORE_VERSION = 1
 
 
 class EnergyPlannerCoordinator(DataUpdateCoordinator):
@@ -41,21 +47,57 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
         self._slots: list[dict] = []
         self._boiler_power_by_slot: dict[float, float] = {}
         self._custom_events: list[dict] = []
-        self._schedule_midnight_refresh()
+        # raw plan: {entity_id: {"slots": [...], "power_w": float}}
+        self._raw_schedule: dict[str, dict] = {}
+        self._plan_ready: bool = False
+        self._events_store: Store = Store(hass, _STORE_VERSION, _EVENTS_STORE_KEY)
+        self._schedule_store: Store = Store(hass, _STORE_VERSION, _SCHEDULE_STORE_KEY)
+        self._schedule_evening_refresh()
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, self._async_refresh_on_start)
+
+    # ------------------------------------------------------------------ startup
 
     @callback
     def _async_refresh_on_start(self, _: Event) -> None:
-        self.hass.async_create_task(self.async_refresh())
+        self.hass.async_create_task(self._async_load_and_refresh())
 
-    def _schedule_midnight_refresh(self) -> None:
+    async def _async_load_and_refresh(self) -> None:
+        now_ts = dt_util.now().timestamp()
+
+        events_data = await self._events_store.async_load()
+        if events_data:
+            self._custom_events = [
+                e for e in events_data.get("events", [])
+                if e.get("end_ts", 0) > now_ts
+            ]
+
+        schedule_data = await self._schedule_store.async_load()
+        if schedule_data:
+            restored: dict[str, dict] = {}
+            for entity_id, entry in schedule_data.items():
+                future_slots = [s for s in entry.get("slots", []) if s["end"] > now_ts]
+                if future_slots:
+                    restored[entity_id] = {"slots": future_slots, "power_w": entry["power_w"]}
+            if restored:
+                self._raw_schedule = restored
+                self._plan_ready = True
+                _LOGGER.debug("Planning restauré depuis le stockage")
+
+        await self.async_refresh()
+
+    # ----------------------------------------------------------------- midnight
+
+    def _schedule_evening_refresh(self) -> None:
         @callback
-        async def _midnight_refresh(_now: datetime) -> None:
+        async def _evening_refresh(_now: datetime) -> None:
+            self._plan_ready = False  # force recompute
             await self.async_refresh()
 
         self._unsub_midnight = async_track_time_change(
-            self.hass, _midnight_refresh, hour=0, minute=5, second=0
+            self.hass, _evening_refresh, hour=20, minute=0, second=0
         )
+
+    # --------------------------------------------------------------- transitions
 
     def _schedule_transitions(self, transition_timestamps: list[float]) -> None:
         for unsub in self._unsub_transitions:
@@ -83,49 +125,62 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
             unsub()
         self._unsub_transitions.clear()
 
+    # --------------------------------------------------------------- update data
+
     async def _async_update_data(self) -> dict:
+        if self._plan_ready:
+            self._schedule_transitions(self._collect_transitions())
+            return self._build_result()
+
+        # Pas de plan valide : on calcule depuis le capteur de prix
         price_sensor_id = self.config_entry.data[CONF_PRICE_SENSOR]
         state = self.hass.states.get(price_sensor_id)
 
         if state is None:
             _LOGGER.debug("Capteur prix pas encore disponible : %s", price_sensor_id)
-            return {}
+            return self._build_result()
 
         prices: list[dict] = state.attributes.get(PRICE_ATTR, [])
         if not prices:
             _LOGGER.warning("Attribut '%s' vide sur %s", PRICE_ATTR, price_sensor_id)
-            return {}
+            return self._build_result()
 
         boilers = [
             s.data for s in self.config_entry.subentries.values()
             if s.subentry_type == "boiler"
         ]
 
-        schedule, transitions = self._compute_schedule(prices, boilers)
+        self._raw_schedule = self._compute_raw_schedule(prices, boilers)
+        self._plan_ready = True
+        self.hass.async_create_task(self._schedule_store.async_save(self._raw_schedule))
+
+        transitions = self._collect_transitions()
         self._schedule_transitions(transitions)
 
-        return schedule
+        return self._build_result()
 
-    def _compute_schedule(
+    # ------------------------------------------------------------------ planning
+
+    def _compute_raw_schedule(
         self, prices: list[dict], boilers: list[dict]
-    ) -> tuple[dict[str, dict], list[float]]:
+    ) -> dict[str, dict]:
         if not prices:
-            return {}, []
+            return {}
 
         now_ts = dt_util.now().timestamp()
-
         sorted_prices = sorted(prices, key=lambda p: p[PRICE_TIMESTAMP])
         slots: list[dict] = []
+
         for i, entry in enumerate(sorted_prices):
             start: float = entry[PRICE_TIMESTAMP]
-            if i + 1 < len(sorted_prices):
-                end: float = sorted_prices[i + 1][PRICE_TIMESTAMP]
-            else:
-                gap = (
+            end: float = (
+                sorted_prices[i + 1][PRICE_TIMESTAMP]
+                if i + 1 < len(sorted_prices)
+                else start + (
                     sorted_prices[-1][PRICE_TIMESTAMP] - sorted_prices[-2][PRICE_TIMESTAMP]
                     if len(sorted_prices) > 1 else 3600
                 )
-                end = start + gap
+            )
             slots.append({
                 "start": start,
                 "end": end,
@@ -134,42 +189,76 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
             })
 
         self._slots = slots
-        self._boiler_power_by_slot = {}
 
-        schedule: dict[str, dict] = {}
-        all_transitions: set[float] = set()
-
+        raw: dict[str, dict] = {}
         for boiler in boilers:
             entity_id = boiler[CONF_BOILER_ENTITY]
             needed_min: float = boiler[CONF_BOILER_DURATION]
             power_w: float = boiler.get(CONF_BOILER_POWER, 0)
+            latest_time: str = boiler.get(CONF_BOILER_LATEST, "")
+
+            horizon_ts = self._compute_horizon(now_ts, latest_time)
+            future_slots = [s for s in slots if s["end"] > now_ts and s["start"] < horizon_ts]
 
             selected: list[dict] = []
             covered_min = 0.0
-            for slot in sorted(slots, key=lambda s: s["price"]):
+            for slot in sorted(future_slots, key=lambda s: s["price"]):
                 if covered_min >= needed_min:
                     break
                 selected.append(slot)
                 covered_min += slot["duration_min"]
 
-            for s in selected:
+            raw[entity_id] = {"slots": selected, "power_w": power_w}
+
+        self._rebuild_boiler_power_map(raw)
+        return raw
+
+    @staticmethod
+    def _compute_horizon(now_ts: float, latest_time: str) -> float:
+        """Retourne le timestamp de la prochaine occurrence de latest_time (HH:MM:SS)."""
+        if not latest_time:
+            return now_ts + 86400
+        try:
+            h, m, s = (int(x) for x in latest_time.split(":"))
+        except (ValueError, AttributeError):
+            return now_ts + 86400
+        from datetime import timedelta
+        now_dt = dt_util.now()
+        candidate = now_dt.replace(hour=h, minute=m, second=s, microsecond=0)
+        if candidate.timestamp() <= now_ts:
+            candidate += timedelta(days=1)
+        return candidate.timestamp()
+
+    def _rebuild_boiler_power_map(self, raw: dict[str, dict]) -> None:
+        self._boiler_power_by_slot = {}
+        for entry in raw.values():
+            for s in entry["slots"]:
                 self._boiler_power_by_slot[s["start"]] = (
-                    self._boiler_power_by_slot.get(s["start"], 0.0) + power_w
+                    self._boiler_power_by_slot.get(s["start"], 0.0) + entry["power_w"]
                 )
 
-            is_on = any(s["start"] <= now_ts < s["end"] for s in selected)
+    def _collect_transitions(self) -> list[float]:
+        transitions: set[float] = set()
+        for entry in self._raw_schedule.values():
+            for s in entry["slots"]:
+                transitions.add(s["start"])
+                transitions.add(s["end"])
+        return sorted(transitions)
+
+    def _build_result(self) -> dict:
+        now_ts = dt_util.now().timestamp()
+        result: dict[str, dict] = {}
+        for entity_id, entry in self._raw_schedule.items():
+            slots = entry["slots"]
+            power_w = entry["power_w"]
+            is_on = any(s["start"] <= now_ts < s["end"] for s in slots)
             scheduled_slots = self._merge_slots(
-                [s for s in selected if s["end"] > now_ts],
-                power_w,
+                [s for s in slots if s["end"] > now_ts], power_w
             )
+            result[entity_id] = {"is_on": is_on, "scheduled_slots": scheduled_slots}
+        return result
 
-            schedule[entity_id] = {"is_on": is_on, "scheduled_slots": scheduled_slots}
-
-            for s in selected:
-                all_transitions.add(s["start"])
-                all_transitions.add(s["end"])
-
-        return schedule, sorted(all_transitions)
+    # ---------------------------------------------------------------- merge/cost
 
     @staticmethod
     def _merge_slots(slots: list[dict], power_w: float) -> list[dict]:
@@ -202,6 +291,8 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
             for s in merged
         ]
 
+    # ---------------------------------------------------------------- power cap
+
     def _get_max_power(self) -> float | None:
         sensor_id = self.config_entry.data.get(CONF_MAX_POWER_SENSOR)
         if not sensor_id:
@@ -220,6 +311,8 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
             if event["start_ts"] < slot_end_ts and event["end_ts"] > slot_start_ts:
                 total += event["power_w"]
         return total
+
+    # --------------------------------------------------------- plan_device service
 
     def find_cheapest_slot(
         self,
@@ -302,4 +395,7 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
             "start_iso": dt_util.utc_from_timestamp(start_ts).isoformat(),
             "end_iso": dt_util.utc_from_timestamp(end_ts).isoformat(),
         })
+        self.hass.async_create_task(
+            self._events_store.async_save({"events": self._custom_events})
+        )
         self.async_update_listeners()

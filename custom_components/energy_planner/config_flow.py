@@ -10,6 +10,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    TimeSelector,
 )
 
 from .const import (
@@ -19,11 +20,12 @@ from .const import (
     CONF_BOILER_ENTITY,
     CONF_BOILER_POWER,
     CONF_BOILER_DURATION,
+    CONF_BOILER_LATEST,
 )
 
 _BOILER_SCHEMA = vol.Schema({
     vol.Required(CONF_BOILER_ENTITY): EntitySelector(
-        EntitySelectorConfig(domain="water_heater")
+        EntitySelectorConfig(domain="switch")
     ),
     vol.Required(CONF_BOILER_POWER, default=2000): NumberSelector(
         NumberSelectorConfig(min=100, max=20000, step=100, unit_of_measurement="W", mode=NumberSelectorMode.BOX)
@@ -31,6 +33,7 @@ _BOILER_SCHEMA = vol.Schema({
     vol.Required(CONF_BOILER_DURATION, default=120): NumberSelector(
         NumberSelectorConfig(min=30, max=720, step=30, unit_of_measurement="min", mode=NumberSelectorMode.SLIDER)
     ),
+    vol.Optional(CONF_BOILER_LATEST): TimeSelector(),
 })
 
 
@@ -110,6 +113,7 @@ class BoilerSubentryFlow(config_entries.ConfigSubentryFlow):
                     CONF_BOILER_ENTITY: entity_id,
                     CONF_BOILER_POWER: user_input[CONF_BOILER_POWER],
                     CONF_BOILER_DURATION: user_input[CONF_BOILER_DURATION],
+                    CONF_BOILER_LATEST: user_input[CONF_BOILER_LATEST],
                 },
             )
 
@@ -131,6 +135,7 @@ class BoilerSubentryFlow(config_entries.ConfigSubentryFlow):
                     CONF_BOILER_ENTITY: entity_id,
                     CONF_BOILER_POWER: user_input[CONF_BOILER_POWER],
                     CONF_BOILER_DURATION: user_input[CONF_BOILER_DURATION],
+                    CONF_BOILER_LATEST: user_input[CONF_BOILER_LATEST],
                 },
             )
 
@@ -138,13 +143,14 @@ class BoilerSubentryFlow(config_entries.ConfigSubentryFlow):
             step_id="reconfigure",
             data_schema=vol.Schema({
                 vol.Required(CONF_BOILER_ENTITY, default=current[CONF_BOILER_ENTITY]): EntitySelector(
-                    EntitySelectorConfig(domain="water_heater")
+                    EntitySelectorConfig(domain="switch")
                 ),
                 vol.Required(CONF_BOILER_POWER, default=current[CONF_BOILER_POWER]): NumberSelector(
                     NumberSelectorConfig(min=100, max=20000, step=100, unit_of_measurement="W", mode=NumberSelectorMode.BOX)
                 ),
                 vol.Required(CONF_BOILER_DURATION, default=current[CONF_BOILER_DURATION]): NumberSelector(
-                    NumberSelectorConfig(min=0.5, max=12, step=0.5, unit_of_measurement="h", mode=NumberSelectorMode.SLIDER)
+                    NumberSelectorConfig(min=30, max=720, step=30, unit_of_measurement="min", mode=NumberSelectorMode.SLIDER)
                 ),
+                vol.Optional(CONF_BOILER_LATEST, description={"suggested_value": current.get(CONF_BOILER_LATEST)}): TimeSelector(),
             }),
         )
