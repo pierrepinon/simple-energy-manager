@@ -389,6 +389,7 @@ class EnergyPlannerCoordinator(DataUpdateCoordinator):
         power_w: float,
         cost: float,
     ) -> None:
+        self._custom_events = [e for e in self._custom_events if e["label"] != label]
         self._custom_events.append({
             "label": label,
             "start_ts": start_ts,
